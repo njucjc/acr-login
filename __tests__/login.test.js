@@ -40,12 +40,36 @@ describe('run', () => {
         jest.restoreAllMocks();
     });
     
+    test('should fail when accessKeyId is provided but accessKeySecret is missing', async () => {
+        // Arrange
+        core.getInput.mockImplementation((name) => {
+            switch (name) {
+                case 'access-key-id': 
+                    return 'test-access-key-id';
+                case 'access-key-secret': 
+                    return '';
+                case 'region-id': 
+                    return 'cn-hangzhou';
+                default: 
+                    return '';
+            }
+        });
+        
+        // Act
+        await run();
+        
+        // Assert
+        expect(core.setFailed).toHaveBeenCalledWith('Action failed: access-key-secret is required when access-key-id is provided');
+    });
+
     test('should fail when accessKeyId is provided but regionId is missing', async () => {
         // Arrange
         core.getInput.mockImplementation((name) => {
             switch (name) {
                 case 'access-key-id': 
                     return 'test-access-key-id';
+                case 'access-key-secret': 
+                    return 'test-access-key-secret';
                 case 'region-id': 
                     return '';
                 default: 
@@ -57,7 +81,7 @@ describe('run', () => {
         await run();
         
         // Assert
-        expect(core.setFailed).toHaveBeenCalledWith('Action failed for region-id is missing');
+        expect(core.setFailed).toHaveBeenCalledWith('Action failed: region-id is required when access-key-id is provided');
     });
     
     test('should use ROA client when accessKeyId and regionId are provided but instanceId is missing', async () => {
@@ -290,7 +314,7 @@ describe('run', () => {
         await run();
         
         // Assert
-        expect(core.setFailed).toHaveBeenCalledWith(`Action failed to get authorization token with error: Error: ${errorMessage}`);
+        expect(core.setFailed).toHaveBeenCalledWith(`Action failed to get authorization token: ${errorMessage}`);
     });
     
     test('should fail when RPC client request fails', async () => {
@@ -324,7 +348,7 @@ describe('run', () => {
         await run();
         
         // Assert
-        expect(core.setFailed).toHaveBeenCalledWith(`Action failed to get authorization token with error: Error: ${errorMessage}`);
+        expect(core.setFailed).toHaveBeenCalledWith(`Action failed to get authorization token: ${errorMessage}`);
     });
     
     test('should fail when Docker login fails', async () => {
@@ -349,8 +373,11 @@ describe('run', () => {
             }
         });
         
-        // Act & Assert
-        await expect(run()).rejects.toThrow(errorMessage);
+        // Act
+        await run();
+        
+        // Assert
+        expect(core.setFailed).toHaveBeenCalledWith(`Docker login failed: ${errorMessage}`);
     });
 
     // Tests for endpoint handling logic
@@ -447,9 +474,6 @@ describe('run', () => {
             }
         });
 
-        // Spy on getAPIEndpoint
-        const { getAPIEndpoint } = require('../src/login.js');
-        jest.spyOn({ getAPIEndpoint }, 'getAPIEndpoint');
         // Act
         await run();
 
@@ -517,5 +541,18 @@ describe('run', () => {
         });
 
         expect(mockROAClient.request).toHaveBeenCalledWith('GET', '/tokens');
+    });
+
+    test('should fail when username and password are not provided', async () => {
+        // Arrange
+        core.getInput.mockImplementation(() => '');
+
+        // Act
+        await run();
+
+        // Assert
+        expect(core.setFailed).toHaveBeenCalledWith(
+            'Action failed: username and password are required. Provide them directly or via access-key-id/access-key-secret.'
+        );
     });
 });
